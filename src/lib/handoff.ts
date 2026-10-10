@@ -1,0 +1,93 @@
+// Cross-agent handoff: two sessions for state, grafted chat for continuity.
+
+import type { UserUnderstanding } from "./understanding";
+import { normalizeUnderstandingShape } from "./understanding";
+import type { AgentId } from "./seed";
+
+export type HandoffFrom = "home" | "orchestrator" | "matchmaker" | "sidebyside";
+
+export interface GraftedMessage {
+  role: "user" | "assistant";
+  content: string;
+  t?: number;
+}
+
+export interface SideBySideHints {
+  activity?: string;
+  when?: string;
+  area?: string;
+}
+
+export interface HandoffContext {
+  from: HandoffFrom;
+  parentSessionId?: string;
+  seed: string;
+  summary: string;
+  understanding?: UserUnderstanding;
+  sideBySideHints?: SideBySideHints;
+  /** Full chat to show in the child session (cross-session continuity). */
+  graftedMessages: GraftedMessage[];
+  /** How many agent switches already happened in this chain. */
+  handoffCount: number;
+  /** Transition line shown as assistant message after graft. */
+  transitionReply?: string;
+}
+
+export const MAX_HANDOFF_COUNT = 2;
+
+export type HandoffTargetAgent = "matchmaker" | "sidebyside";
+
+export function isHandoffMarker(msg: { kind?: string }): boolean {
+  return msg.kind === "handoff";
+}
+
+/** Strip handoff UI markers before sending chat to an LLM. */
+export function chatHistoryFromMessages(
+  messages: { role: string; text: string; kind?: string }[],
+): { role: "user" | "assistant"; content: string }[] {
+  return messages
+    .filter(
+      (m) =>
+        (m.role === "user" || m.role === "assistant") &&
+        !isHandoffMarker(m) &&
+        m.text.trim().length > 0,
+    )
+    .map((m) => ({ role: m.role as "user" | "assistant", content: m.text }));
+}
+
+export function targetAgentId(target: "matchmaker" | "sidebyside"): AgentId {
+  return target;
+}
+
+export function sessionAgentFromTarget(target: "matchmaker" | "sidebyside"): "introduce" | "do_something" {
+  return target === "matchmaker" ? "introduce" : "do_something";
+}
+
+export function emptyUnderstanding(): UserUnderstanding {
+  return {
+    positive: [],
+    negative: [],
+    notes: [],
+    traits: [],
+    interests: [],
+    occupation: [],
+    pace: [],
+  };
+}
+
+export function mergeUnderstanding(
+  base: UserUnderstanding | undefined,
+  patch: Partial<UserUnderstanding> | undefined,
+): UserUnderstanding {
+  const b = base ?? emptyUnderstanding();
+  if (!patch) return b;
+  return normalizeUnderstandingShape({
+    positive: [...new Set([...(patch.positive ?? b.positive)])].slice(0, 24),
+    negative: [...new Set([...(patch.negative ?? b.negative)])].slice(0, 12),
+    notes: (patch.notes ?? b.notes).slice(-6),
+    traits: patch.traits ?? b.traits,
+    interests: patch.interests ?? b.interests,
+    occupation: patch.occupation ?? b.occupation,
+    pace: patch.pace ?? b.pace,
+  });
+}
