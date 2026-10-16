@@ -579,6 +579,23 @@
       "favorites_hint": "喝茶、散步、唱粵曲、下棋都可以。寫一件，再說一句為什麼喜歡。"
     },
     "optional": "可選",
+    "location": {
+      "title": "活動範圍",
+      "district_placeholder": "選擇香港地區",
+      "area_label": "附近地點（可選）",
+      "area_placeholder": "例如：沙田站、某個屋邨或商場",
+      "travel_label": "最多願意出行",
+      "travel_option": "{{minutes}} 分鐘",
+      "use_current": "自動定位",
+      "locating": "定位中…",
+      "privacy": "無需填寫門牌地址。定位只保存約 1 公里精度的位置，其他人只會看到地區和你填寫的附近地點。",
+      "status": {
+        "located": "已根據目前位置選好地區，你可以手動修改。",
+        "denied": "沒有獲得定位權限，請手動選擇地區。",
+        "unavailable": "暫時無法定位，請手動選擇地區。",
+        "outside_hk": "目前位置似乎不在香港，請手動選擇常活動的地區。"
+      }
+    },
     "visibility": {
       "hide": "對他人隱藏",
       "show": "對他人顯示",

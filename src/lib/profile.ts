@@ -3,6 +3,7 @@
 import { getProfileFn, saveProfileFn } from "./api/profile.functions";
 import {
   EMPTY_PROFILE,
+  EMPTY_LOCATION,
   MAX_FAVORITES,
   MIN_FAVORITES,
   MIN_MOMENTS,
@@ -12,14 +13,26 @@ import {
   type WorkKind,
   type Gender,
   type Orientation,
+  type LocationPreference,
+  type TravelMinutes,
   isHidden,
   toggleHidden,
   isVitalsComplete,
 } from "./profile-shape";
 
-export type { Profile, ProfileMoment, Favorite, WorkKind, Gender, Orientation };
+export type {
+  Profile,
+  ProfileMoment,
+  Favorite,
+  WorkKind,
+  Gender,
+  Orientation,
+  LocationPreference,
+  TravelMinutes,
+};
 export {
   EMPTY_PROFILE,
+  EMPTY_LOCATION,
   MAX_FAVORITES,
   MIN_FAVORITES,
   MIN_MOMENTS,
@@ -58,11 +71,9 @@ export async function hydrateProfile(): Promise<Profile> {
 export function saveProfile(p: Profile) {
   cache = p;
   emit();
-  void saveProfileFn({ data: { profile: p as unknown as Record<string, unknown> } }).catch(
-    () => {
-      /* offline / test env */
-    },
-  );
+  void saveProfileFn({ data: { profile: p as unknown as Record<string, unknown> } }).catch(() => {
+    /* offline / test env */
+  });
 }
 
 /** Test helper */

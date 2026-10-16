@@ -4,20 +4,27 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db/client.server";
 import { profiles } from "../db/schema";
 import { getSessionUser } from "../db/session.server";
-import { EMPTY_PROFILE, type Profile } from "../profile-shape";
+import { EMPTY_LOCATION, EMPTY_PROFILE, type Profile } from "../profile-shape";
 
 function asProfile(data: unknown): Profile {
   if (!data || typeof data !== "object") return { ...EMPTY_PROFILE };
-  return { ...EMPTY_PROFILE, ...(data as Profile) };
+  const stored = data as Partial<Profile>;
+  return {
+    ...EMPTY_PROFILE,
+    ...stored,
+    location: { ...EMPTY_LOCATION, ...(stored.location ?? {}) },
+  };
 }
 
-export const getProfileFn = createServerFn({ method: "GET" }).handler(async (): Promise<Profile> => {
-  const user = await getSessionUser();
-  if (!user) return { ...EMPTY_PROFILE };
-  const db = getDb();
-  const rows = await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1);
-  return asProfile(rows[0]?.data);
-});
+export const getProfileFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Profile> => {
+    const user = await getSessionUser();
+    if (!user) return { ...EMPTY_PROFILE };
+    const db = getDb();
+    const rows = await db.select().from(profiles).where(eq(profiles.userId, user.id)).limit(1);
+    return asProfile(rows[0]?.data);
+  },
+);
 
 export const saveProfileFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ profile: z.record(z.unknown()) }))
@@ -28,7 +35,11 @@ export const saveProfileFn = createServerFn({ method: "POST" })
     const db = getDb();
     await db
       .insert(profiles)
-      .values({ userId: user.id, data: profile as unknown as Record<string, unknown>, updatedAt: new Date() })
+      .values({
+        userId: user.id,
+        data: profile as unknown as Record<string, unknown>,
+        updatedAt: new Date(),
+      })
       .onConflictDoUpdate({
         target: profiles.userId,
         set: { data: profile as unknown as Record<string, unknown>, updatedAt: new Date() },

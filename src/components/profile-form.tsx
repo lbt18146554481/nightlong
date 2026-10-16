@@ -22,11 +22,15 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  MapPin,
+  Navigation,
+  LoaderCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Lang } from "@/lib/i18n";
 import {
   EMPTY_PROFILE,
+  EMPTY_LOCATION,
   MIN_MOMENTS,
   MAX_FAVORITES,
   addFavorite,
@@ -42,8 +46,16 @@ import {
   type Favorite,
   type Gender,
   type Profile,
+  type TravelMinutes,
   type WorkKind,
 } from "@/lib/profile";
+import {
+  HK_DISTRICTS,
+  approximateCoordinate,
+  districtById,
+  districtIdFromLabel,
+  nearestHongKongDistrict,
+} from "@/lib/hk-location";
 import {
   MOMENT_PROMPTS,
   getMomentPromptById,
@@ -62,8 +74,8 @@ const KIND_ICONS: Record<WorkKind, LucideIcon> = {
   other: Sparkles,
 };
 const GENDERS: Gender[] = ["female", "male", "prefer_not_to_say"];
-const SHOWN_PROMPTS = MOMENT_PROMPTS.filter((p) =>
-  p.id === "ideal-saturday" || p.id === "city-spot" || p.id === "weeknight",
+const SHOWN_PROMPTS = MOMENT_PROMPTS.filter(
+  (p) => p.id === "ideal-saturday" || p.id === "city-spot" || p.id === "weeknight",
 );
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2MB soft cap
 
@@ -78,6 +90,9 @@ export function ProfileForm({ lang, compact = false, onChange }: Props) {
   const { t } = useTranslation();
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
   const [hydrated, setHydrated] = useState(false);
+  const [locationStatus, setLocationStatus] = useState<
+    "idle" | "locating" | "located" | "denied" | "unavailable" | "outside_hk"
+  >("idle");
 
   useEffect(() => {
     setProfile(loadProfile());
@@ -94,6 +109,65 @@ export function ProfileForm({ lang, compact = false, onChange }: Props) {
 
   function updateField<K extends keyof Profile>(k: K, v: Profile[K]) {
     setProfile((p) => ({ ...p, [k]: v }));
+  }
+  function selectDistrict(districtId: string) {
+    const district = districtById(districtId);
+    setLocationStatus("idle");
+    setProfile((p) => ({
+      ...p,
+      city: district?.label.en ?? "",
+      location: {
+        ...(p.location ?? EMPTY_LOCATION),
+        district: districtId,
+        latitudeApprox: null,
+        longitudeApprox: null,
+        source: "manual",
+      },
+    }));
+  }
+  function updateLocationArea(area: string) {
+    setProfile((p) => ({
+      ...p,
+      location: { ...(p.location ?? EMPTY_LOCATION), area },
+    }));
+  }
+  function updateTravelMinutes(travelMinutes: TravelMinutes) {
+    setProfile((p) => ({
+      ...p,
+      location: { ...(p.location ?? EMPTY_LOCATION), travelMinutes },
+    }));
+  }
+  function useCurrentLocation() {
+    if (!("geolocation" in navigator)) {
+      setLocationStatus("unavailable");
+      return;
+    }
+
+    setLocationStatus("locating");
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const district = nearestHongKongDistrict(coords.latitude, coords.longitude);
+        if (!district) {
+          setLocationStatus("outside_hk");
+          return;
+        }
+        setProfile((p) => ({
+          ...p,
+          city: district.label.en,
+          location: {
+            ...(p.location ?? EMPTY_LOCATION),
+            district: district.id,
+            latitudeApprox: approximateCoordinate(coords.latitude),
+            longitudeApprox: approximateCoordinate(coords.longitude),
+            source: "geolocation",
+          },
+        }));
+        setLocationStatus("located");
+      },
+      (error) =>
+        setLocationStatus(error.code === error.PERMISSION_DENIED ? "denied" : "unavailable"),
+      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
+    );
   }
   function updateMoment(promptId: string, answer: string) {
     setProfile((p) => upsertMoment(p, promptId, answer));
@@ -123,6 +197,8 @@ export function ProfileForm({ lang, compact = false, onChange }: Props) {
       ? [{ kind: "food" as WorkKind, title: "", why: "" }]
       : profile.favorites;
   const hasStoredFavs = profile.favorites.length > 0;
+  const location = profile.location ?? EMPTY_LOCATION;
+  const selectedDistrictId = location.district || districtIdFromLabel(profile.city);
 
   return (
     <div className={gap}>
@@ -165,11 +241,21 @@ export function ProfileForm({ lang, compact = false, onChange }: Props) {
             />
           </Field>
           <Field label={t("profile.f.city")}>
-            <input
-              value={profile.city}
-              onChange={(e) => updateField("city", e.target.value)}
+            <select
+              value={selectedDistrictId}
+              onChange={(e) => selectDistrict(e.target.value)}
               className="w-full bg-transparent border-b border-border focus:border-foreground outline-none py-1.5 text-[14.5px]"
-            />
+              required
+            >
+              <option value="" disabled>
+                {t("profile.location.district_placeholder")}
+              </option>
+              {HK_DISTRICTS.map((district) => (
+                <option key={district.id} value={district.id}>
+                  {district.label[lang]}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label={t("profile.f.occupation")}>
             <input
@@ -199,6 +285,75 @@ export function ProfileForm({ lang, compact = false, onChange }: Props) {
               ))}
             </select>
           </Field>
+          <div className="sm:col-span-2 rounded-xl border border-border bg-secondary/20 p-4 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <MapPin className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+                <div>
+                  <div className="text-[13px] font-medium text-foreground">
+                    {t("profile.location.title")}
+                  </div>
+                  <p className="text-[11.5px] text-muted-foreground mt-0.5 leading-snug">
+                    {t("profile.location.privacy")}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={useCurrentLocation}
+                disabled={locationStatus === "locating"}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-[12px] text-foreground/80 hover:border-foreground/40 disabled:opacity-60 transition-colors"
+              >
+                {locationStatus === "locating" ? (
+                  <LoaderCircle className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Navigation className="w-3.5 h-3.5" />
+                )}
+                {t(
+                  locationStatus === "locating"
+                    ? "profile.location.locating"
+                    : "profile.location.use_current",
+                )}
+              </button>
+            </div>
+
+            {locationStatus !== "idle" && locationStatus !== "locating" && (
+              <p
+                role="status"
+                className={
+                  "text-[11.5px] " +
+                  (locationStatus === "located" ? "text-emerald-700" : "text-destructive")
+                }
+              >
+                {t(`profile.location.status.${locationStatus}`)}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label={t("profile.location.area_label")}>
+                <input
+                  value={location.area}
+                  onChange={(e) => updateLocationArea(e.target.value)}
+                  placeholder={t("profile.location.area_placeholder")}
+                  maxLength={60}
+                  className="w-full bg-transparent border-b border-border focus:border-foreground outline-none py-1.5 text-[14px] placeholder:text-muted-foreground/60"
+                />
+              </Field>
+              <Field label={t("profile.location.travel_label")}>
+                <select
+                  value={location.travelMinutes}
+                  onChange={(e) => updateTravelMinutes(Number(e.target.value) as TravelMinutes)}
+                  className="w-full bg-transparent border-b border-border focus:border-foreground outline-none py-1.5 text-[14px]"
+                >
+                  {[15, 30, 45, 60].map((minutes) => (
+                    <option key={minutes} value={minutes}>
+                      {t("profile.location.travel_option", { minutes })}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -579,6 +579,23 @@
       "favorites_hint": "Tea, a walk, Cantonese opera, or a game of chess. Name one, and say why you like it."
     },
     "optional": "Optional",
+    "location": {
+      "title": "Activity area",
+      "district_placeholder": "Select a Hong Kong district",
+      "area_label": "Nearby place (optional)",
+      "area_placeholder": "e.g. Sha Tin Station, an estate, or a mall",
+      "travel_label": "Willing to travel up to",
+      "travel_option": "{{minutes}} minutes",
+      "use_current": "Use my location",
+      "locating": "Locating…",
+      "privacy": "No street address needed. Location is stored at roughly 1 km precision; other people only see your district and the nearby place you enter.",
+      "status": {
+        "located": "District selected from your current location. You can change it manually.",
+        "denied": "Location permission was not granted. Please select a district.",
+        "unavailable": "Location is unavailable right now. Please select a district.",
+        "outside_hk": "Your location appears to be outside Hong Kong. Select where you are usually active."
+      }
+    },
     "visibility": {
       "hide": "Hide from others",
       "show": "Show to others",

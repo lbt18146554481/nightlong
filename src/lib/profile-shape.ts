@@ -6,14 +6,31 @@ export type WorkKind = "book" | "film" | "music" | "exhibition" | "food" | "spor
 
 export type Gender = "" | "female" | "male" | "nonbinary" | "prefer_not_to_say";
 export type Orientation =
-  | ""
-  | "straight"
-  | "gay"
-  | "lesbian"
-  | "bi"
-  | "pan"
-  | "asexual"
-  | "prefer_not_to_say";
+  "" | "straight" | "gay" | "lesbian" | "bi" | "pan" | "asexual" | "prefer_not_to_say";
+
+export type LocationSource = "manual" | "geolocation";
+export type TravelMinutes = 15 | 30 | 45 | 60;
+
+export interface LocationPreference {
+  /** Stable id for one of Hong Kong's 18 districts. */
+  district: string;
+  /** Optional neighbourhood or nearby landmark, never an exact home address. */
+  area: string;
+  /** Approximate coordinates rounded before storage (about 1 km precision). */
+  latitudeApprox: number | null;
+  longitudeApprox: number | null;
+  travelMinutes: TravelMinutes;
+  source: LocationSource;
+}
+
+export const EMPTY_LOCATION: LocationPreference = {
+  district: "",
+  area: "",
+  latitudeApprox: null,
+  longitudeApprox: null,
+  travelMinutes: 30,
+  source: "manual",
+};
 
 export interface ProfileMoment {
   promptId: string;
@@ -31,6 +48,7 @@ export interface Profile {
   name: string;
   age: number | null;
   city: string;
+  location: LocationPreference;
   occupation: string;
   gender: Gender;
   orientation: Orientation;
@@ -55,6 +73,7 @@ export const EMPTY_PROFILE: Profile = {
   name: "",
   age: null,
   city: "",
+  location: { ...EMPTY_LOCATION },
   occupation: "",
   gender: "",
   orientation: "",
