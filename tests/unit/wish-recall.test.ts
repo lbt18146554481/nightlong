@@ -367,4 +367,30 @@ describe("wish-recall", () => {
     expect(result.candidates.length).toBeGreaterThan(0);
     expect(result.candidates.some((c) => c.id.startsWith("extra:beijing-walk-"))).toBe(true);
   });
+
+  it("matches Shanghai tea wishes when the seeker city is a full place path", async () => {
+    const { elderDemoIntents } = await import("@/lib/elder-demo-intents");
+    const mine = publishMyIntent({
+      kind: "other",
+      rawText: "我想找人喝茶",
+      activityCore: "喝茶",
+      city: "中国 · 上海 · 上海",
+      city_zh: "中国 · 上海 · 上海",
+      placeMode: "offline",
+      place: { city: "shanghai" },
+    });
+    const result = recallWishWithRelaxation(
+      {
+        mine,
+        hardFilters: { cities: ["shanghai"], excludeCities: [], kinds: [] },
+        buddyHardFilters: EMPTY_BUDDY_HARD_FILTERS,
+        understanding: EMPTY_U,
+        pool: elderDemoIntents(),
+        browseStrict: true,
+      },
+      "zh-CN",
+    );
+    expect(result.candidates.some((c) => c.id === "elder:sh-tea")).toBe(true);
+    expect(result.candidates.some((c) => c.id === "elder:tea-chat")).toBe(false);
+  });
 });

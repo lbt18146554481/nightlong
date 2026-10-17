@@ -68,7 +68,10 @@ export async function queryRecallIntentPool(mine: Intent): Promise<Intent[]> {
   const mergeDemoSeeds = (items: Intent[]): Intent[] => {
     const byId = new Map(items.map((it) => [it.id, it]));
     for (const seed of seedPool()) {
-      if (!byId.has(seed.id) && seed.id !== mine.id && seed.ownerId !== mine.ownerId) {
+      if (seed.id === mine.id || seed.ownerId === mine.ownerId) continue;
+      // Demo wishes live in code. Refresh them so a stale database row
+      // cannot keep an expired copy in front of the current examples.
+      if (!byId.has(seed.id) || seed.id.startsWith("elder:")) {
         byId.set(seed.id, seed);
       }
     }

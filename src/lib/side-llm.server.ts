@@ -2233,9 +2233,6 @@ export async function runSideTurn(
     pendingConfirm = input.pendingConfirm;
     suppressAssistantReply = true;
     reply = "";
-  } else if (!reply) {
-    const cfg = await import("./config.server").then((m) => m.getServerConfig());
-    return fallback(input, cfg.deepseekApiKey ? "error" : "no_key");
   }
 
   // Browse deliver-now: never force a pendingBrowseConfirm wait card.
@@ -2250,6 +2247,13 @@ export async function runSideTurn(
     !handoffTo &&
     !isLightSideQueueAction(input.action) &&
     (shouldRebuildQueue || !input.matchIntentId || input.action === "rematch");
+
+  // affirmMatch tells the model to return reply="". The intro is written by
+  // runSideMatchIntroReply below. An empty planning reply is not a disconnect.
+  if (!reply && !suppressAssistantReply && !freshMatchSearch) {
+    const cfg = await import("./config.server").then((m) => m.getServerConfig());
+    return fallback(input, cfg.deepseekApiKey ? "error" : "no_key");
+  }
 
   if (freshMatchSearch) {
     hooks?.onMatchReady?.({

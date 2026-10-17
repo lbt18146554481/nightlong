@@ -16,6 +16,7 @@ import { listBlocked } from "./blocklist";
 import type { IntentStatus } from "./intent-index";
 import { normalizeTimeHHmm } from "./wish-date";
 import { ownerSnapshotFromPerson, type OwnerSnapshot } from "./owner-snapshot";
+import { canonicalCityId } from "./geo";
 import type { WishPlace } from "./wish-place";
 import type { BuddyMatchQuery } from "./wish-match-profile";
 
@@ -109,7 +110,9 @@ export interface Intent {
 }
 
 /** Compare two city labels tolerantly — trims, case-insensitive, and
- *  matches either the English or Chinese label on both sides. */
+ *  matches either the English or Chinese label on both sides.
+ *  Display strings like「中国 · 上海 · 上海」count as the same city as「上海」.
+ */
 export function sameCity(a: Intent, b: Intent): boolean {
   const norm = (s: string) => s.trim().toLowerCase();
   const aEn = norm(a.city || a.ownerCity || "");
@@ -119,7 +122,9 @@ export function sameCity(a: Intent, b: Intent): boolean {
   if ((!aEn && !aZh) || (!bEn && !bZh)) return false;
   if (aEn && (aEn === bEn || aEn === bZh)) return true;
   if (aZh && (aZh === bEn || aZh === bZh)) return true;
-  return false;
+  const idA = canonicalCityId(aZh || aEn);
+  const idB = canonicalCityId(bZh || bEn);
+  return Boolean(idA && idB && idA === idB);
 }
 
 // ---- Compatibility ------------------------------------------------------
