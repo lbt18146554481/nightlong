@@ -150,6 +150,20 @@ export async function runPlaceExtract(input: PlaceExtractInput): Promise<PlaceEx
     };
   }
 
+  // A known city or venue (香港公园 → 香港) is the place. Don't let the model
+  // store the venue name as a different city and then miss every local wish.
+  if (!isPlaceFlexText(blob) && !isPlaceOnlineText(blob)) {
+    const catalog = findPlaceInText(blob);
+    if (catalog?.city) {
+      const flags = legacyFlagsFromSpec({ placeMode: "offline", place: catalog });
+      return {
+        placeRaw: displayRaw || blob.slice(0, 80),
+        ...flags,
+        publishable: true,
+      };
+    }
+  }
+
   try {
     const parsed = await chatCompletionJson<LlmPlaceExtractJson>(
       [

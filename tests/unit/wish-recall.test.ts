@@ -368,29 +368,38 @@ describe("wish-recall", () => {
     expect(result.candidates.some((c) => c.id.startsWith("extra:beijing-walk-"))).toBe(true);
   });
 
-  it("matches Shanghai tea wishes when the seeker city is a full place path", async () => {
+  it("matches the Hong Kong Park Sunday morning wish when the place is the park name", async () => {
     const { elderDemoIntents } = await import("@/lib/elder-demo-intents");
+    const { cityLabelsForId } = await import("@/lib/geo");
+    const labels = cityLabelsForId("hong_kong");
+    expect(labels?.city_zh).toBe("香港");
     const mine = publishMyIntent({
       kind: "other",
-      rawText: "我想找人喝茶",
-      activityCore: "喝茶",
-      city: "中国 · 上海 · 上海",
-      city_zh: "中国 · 上海 · 上海",
+      rawText: "我想周日上午逛香港公园看花",
+      activityCore: "逛公园",
+      city: labels!.city,
+      city_zh: labels!.city_zh,
       placeMode: "offline",
-      place: { city: "shanghai" },
+      place: { city: "hong_kong" },
+      day: "sun",
+      window: "morning",
+      when: "weekend",
+      whenAny: false,
     });
+    const pool = elderDemoIntents();
+    expect(pool.every((item) => item.city_zh === "香港")).toBe(true);
+    expect(pool.some((item) => item.id.startsWith("elder:sh-"))).toBe(false);
     const result = recallWishWithRelaxation(
       {
         mine,
-        hardFilters: { cities: ["shanghai"], excludeCities: [], kinds: [] },
+        hardFilters: { cities: ["hong_kong"], excludeCities: [], kinds: [] },
         buddyHardFilters: EMPTY_BUDDY_HARD_FILTERS,
         understanding: EMPTY_U,
-        pool: elderDemoIntents(),
+        pool,
         browseStrict: true,
       },
       "zh-CN",
     );
-    expect(result.candidates.some((c) => c.id === "elder:sh-tea")).toBe(true);
-    expect(result.candidates.some((c) => c.id === "elder:tea-chat")).toBe(false);
+    expect(result.candidates.some((c) => c.id === "elder:park-flowers")).toBe(true);
   });
 });

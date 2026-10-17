@@ -120,6 +120,13 @@ const COUNTRIES: CountryDef[] = [
     label_zh: "尼日利亚",
   },
   {
+    id: "hk",
+    continent: "asia",
+    aliases: ["hk", "hong kong sar", "香港特别行政区", "香港特別行政區"],
+    label_en: "Hong Kong",
+    label_zh: "香港",
+  },
+  {
     id: "ar",
     continent: "south_america",
     aliases: ["ar", "argentina", "阿根廷"],
@@ -196,6 +203,13 @@ const ADMIN1: Array<{
 
 const CITIES: CityDef[] = [
   // China (for 中国 → city coverage when people exist)
+  {
+    id: "hong_kong",
+    country: "hk",
+    aliases: ["hong kong", "hongkong", "香港"],
+    label_en: "Hong Kong",
+    label_zh: "香港",
+  },
   {
     id: "beijing",
     country: "cn",
@@ -363,6 +377,30 @@ const LANDMARK_TO_CITY: Array<{ cityId: string; aliases: string[] }> = [
       "中关村",
       "五道口",
       "望京",
+    ],
+  },
+  {
+    cityId: "hong_kong",
+    aliases: [
+      "香港公园",
+      "香港公園",
+      "hong kong park",
+      "九龙公园",
+      "九龍公園",
+      "kowloon park",
+      "维多利亚公园",
+      "維多利亞公園",
+      "维园",
+      "維園",
+      "victoria park",
+      "尖东海旁",
+      "尖東海旁",
+      "尖沙咀",
+      "油麻地",
+      "油麻地茶楼",
+      "油麻地茶樓",
+      "龙虎山",
+      "龍虎山",
     ],
   },
   {

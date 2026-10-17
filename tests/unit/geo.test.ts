@@ -35,6 +35,14 @@ describe("geo aliases", () => {
     expect(normalizeCityList(["朝阳公园"])).toEqual(["beijing"]);
     expect(parsePlace("这周末在朝阳公园走跑")?.city).toBe("beijing");
   });
+
+  it("maps 香港公园 to Hong Kong, including traditional characters", () => {
+    expect(parsePlace("香港")?.city).toBe("hong_kong");
+    expect(parsePlace("Hong Kong")?.city).toBe("hong_kong");
+    expect(parsePlace("香港公园")?.city).toBe("hong_kong");
+    expect(parsePlace("香港公園")?.city).toBe("hong_kong");
+    expect(parsePlace("我想周日上午逛香港公园看花")?.city).toBe("hong_kong");
+  });
 });
 
 describe("geo hierarchy", () => {

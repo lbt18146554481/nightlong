@@ -69,6 +69,7 @@ import {
   cityLabelsFromPlace,
   citiesFromPlaceFields,
   isPlaceAny,
+  findPlaceInText,
   legacyFlagsFromSpec,
   normalizePlaceSpec,
   resolvePlaceRaw,
@@ -932,7 +933,7 @@ ${
 
   const jsonBlock = `【JSON】needsTools、affirmMatch 靠前。affirmMatch=true 或 needsTools=true → reply=""（介绍由系统写），但 suggestions 仍要 2-4 条。
 搜人：{"needsTools":false,"affirmMatch":true,"toolNames":[],"confirmLine":null,"askUserInfo":null,"reply":"","suggestions":["短句1","短句2","短句3"],"affirmPublish":false,"pickMatchIntentId":null,"handoffTo":null,"handoffSummary":"","transitionReply":""}
-缺地点：{"needsTools":false,"affirmMatch":false,"toolNames":[],"confirmLine":null,"askUserInfo":{"fieldKey":"activity_place","prompt":"活动想在哪个城市或区域？也可写线上/地点不限","kind":"text","placeholder":"例如：上海"},"reply":"找搭子还差一个地点，填一下下面的卡片就行。","suggestions":["地点不限也可以","线上也行","就在我所在的城市"],"affirmPublish":false,"pickMatchIntentId":null,"handoffTo":null,"handoffSummary":"","transitionReply":""}
+缺地点：{"needsTools":false,"affirmMatch":false,"toolNames":[],"confirmLine":null,"askUserInfo":{"fieldKey":"activity_place","prompt":"活动想在哪个城市或区域？也可写线上/地点不限","kind":"text","placeholder":"例如：香港"},"reply":"找搭子还差一个地点，填一下下面的卡片就行。","suggestions":["地点不限也可以","线上也行","就在我所在的城市"],"affirmPublish":false,"pickMatchIntentId":null,"handoffTo":null,"handoffSummary":"","transitionReply":""}
 闲聊：{"needsTools":false,"affirmMatch":false,"toolNames":[],"confirmLine":null,"askUserInfo":null,"reply":"...","suggestions":["短句1","短句2"],"affirmPublish":false,"pickMatchIntentId":null,"handoffTo":null,"handoffSummary":"","transitionReply":""}
 ${composerSuggestionsRule()}
 ${llmReplyLanguageRule(replyLang)}`;
@@ -1441,6 +1442,28 @@ export async function runSideTurn(
         ? draft.rawText
         : placeAnswer,
     };
+  }
+  // 「周日上午逛香港公园看花」已经写出了地点。先认成香港，避免再要一张地点卡，
+  // 也避免把公园名当成另一个城市。
+  if (
+    !draft.place?.city &&
+    !draft.city?.trim() &&
+    !draft.city_zh?.trim() &&
+    draft.placeMode !== "online" &&
+    draft.placeMode !== "any" &&
+    !draft.placeFlex
+  ) {
+    const hinted = findPlaceInText(`${draft.rawText ?? ""}\n${draft.placeRaw ?? ""}\n${content}`);
+    if (hinted?.city) {
+      const labels = cityLabelsForId(String(hinted.city));
+      draft = {
+        ...draft,
+        placeRaw: draft.placeRaw?.trim() || content.trim(),
+        placeMode: "offline",
+        place: hinted,
+        ...(labels ? { city: labels.city, city_zh: labels.city_zh } : {}),
+      };
+    }
   }
   // Scrub greeting / lane-chip pollution left in old sessions — draft is extract/tool owned.
   if (

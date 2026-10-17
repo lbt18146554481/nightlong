@@ -1,14 +1,13 @@
 import "dotenv/config";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, not } from "drizzle-orm";
 import { inviteCodes, people, premiumPeople, intents } from "../src/lib/db/schema";
 
 async function main() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL missing");
 
-  const { buildSeedPeople } = await import("../src/lib/people-seed.data.ts");
   const { SEED_PERSON_IDS } = await import("../src/lib/people-seed.ids.ts");
   const { invalidatePeopleCache } = await import("../src/lib/people-store.server.ts");
   const { seedPool } = await import("../src/lib/intents.ts");
@@ -33,26 +32,18 @@ async function main() {
     }
   }
 
-  const seedPeople = buildSeedPeople();
-  for (const person of seedPeople) {
-    const row = { id: person.id, data: person as unknown as Record<string, unknown> };
-    await db
-      .insert(people)
-      .values(row)
-      .onConflictDoUpdate({
-        target: people.id,
-        set: { data: row.data },
-      });
-    await db
-      .insert(premiumPeople)
-      .values(row)
-      .onConflictDoUpdate({
-        target: premiumPeople.id,
-        set: { data: row.data },
-      });
-  }
-  console.log(`seeded ${seedPeople.length} people (full + premium)`);
-  console.log("seed person ids:", SEED_PERSON_IDS.join(", "));
+  // Sample member profiles are from other cities. This product keeps Hong Kong
+  // activity wishes, so those profiles are removed instead of refreshed.
+  const removedPeople = SEED_PERSON_IDS.length
+    ? await db.delete(people).where(inArray(people.id, [...SEED_PERSON_IDS])).returning({ id: people.id })
+    : [];
+  const removedPremium = SEED_PERSON_IDS.length
+    ? await db
+        .delete(premiumPeople)
+        .where(inArray(premiumPeople.id, [...SEED_PERSON_IDS]))
+        .returning({ id: premiumPeople.id })
+    : [];
+  console.log(`removed ${removedPeople.length} sample people, ${removedPremium.length} premium copies`);
   invalidatePeopleCache();
 
   const seedIntents = seedPool();
@@ -85,6 +76,25 @@ async function main() {
       });
   }
   console.log(`seeded ${seedIntents.length} intents`);
+
+  // Activity data for this product is Hong Kong only.
+  const removedShanghai = await db
+    .delete(intents)
+    .where(like(intents.id, "elder:sh-%"))
+    .returning({ id: intents.id });
+  const removedOtherCities = await db
+    .delete(intents)
+    .where(and(isNull(intents.userId), not(like(intents.id, "elder:%"))))
+    .returning({ id: intents.id });
+  const removedNonHk = await client`
+    delete from intents
+    where coalesce(data->>'city_zh', '') not like '%香港%'
+      and coalesce(data->>'city', '') not ilike '%hong kong%'
+    returning id
+  `;
+  console.log(
+    `removed ${removedShanghai.length} Shanghai examples, ${removedOtherCities.length} non-Hong Kong sample wishes, ${removedNonHk.length} wishes outside Hong Kong`,
+  );
 
   await client.end();
   console.log("Seed complete.");

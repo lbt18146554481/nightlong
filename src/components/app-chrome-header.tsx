@@ -122,10 +122,13 @@ function HomeActivityLinks({ compact = false }: { compact?: boolean }) {
     : "inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-border bg-card px-3 py-1.5 text-[18px] font-medium text-foreground hover:bg-secondary";
   return (
     <>
-      <Link to="/pool" search={{ view: "signups", id: "", theme: "" }} className={className}>
+      <Link to="/pool" search={{ view: "mine", id: "", theme: "", from: "" }} className={className}>
+        {t("home.mine.posted")}
+      </Link>
+      <Link to="/pool" search={{ view: "signups", id: "", theme: "", from: "" }} className={className}>
         {t("home.mine.signups")}
       </Link>
-      <Link to="/pool" search={{ view: "saved", id: "", theme: "" }} className={className}>
+      <Link to="/pool" search={{ view: "saved", id: "", theme: "", from: "" }} className={className}>
         {t("home.mine.saved")}
       </Link>
     </>

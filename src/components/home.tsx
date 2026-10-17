@@ -439,7 +439,7 @@ export function Home() {
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => void navigate({ to: "/pool", search: { view: "list", id: "", theme: "" } })}
+                onClick={() => void navigate({ to: "/pool", search: { view: "list", id: "", theme: "", from: "" } })}
                 className="rounded-2xl border border-border bg-card px-3 py-4 text-center text-[18px] font-medium inline-flex items-center justify-center gap-2 whitespace-nowrap"
               >
                 <Sparkles className="w-5 h-5 shrink-0" />
@@ -452,7 +452,7 @@ export function Home() {
                     void navigate({ to: "/auth", search: { mode: "signin", redirect: "/pool" } });
                     return;
                   }
-                  void navigate({ to: "/pool", search: { view: "new", id: "", theme: "" } });
+                  void navigate({ to: "/pool", search: { view: "new", id: "", theme: "", from: "" } });
                 }}
                 className="rounded-2xl border border-border bg-card px-3 py-4 text-center text-[18px] font-medium inline-flex items-center justify-center gap-2 whitespace-nowrap"
               >

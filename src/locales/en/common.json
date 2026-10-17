@@ -12,6 +12,7 @@
       "publish": "Post a wish"
     },
     "mine": {
+      "posted": "Posted",
       "signups": "Joined",
       "saved": "Saved"
     },

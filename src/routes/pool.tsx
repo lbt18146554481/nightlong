@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { listSeedIntentsFn } from "@/lib/api/data.functions";
 import { useAuth } from "@/lib/auth";
-import { useSavedBootstrap, useSavedWishes } from "@/data/hooks";
+import { useMyIntents, useSavedBootstrap, useSavedWishes } from "@/data/hooks";
 import { toggleSaved } from "@/lib/saved-intents";
 import { hydrateSignups, listSignups, subscribeSignups, toggleSignup } from "@/lib/wish-signups";
 import {
@@ -15,7 +15,6 @@ import {
   type ElderCost,
   type ElderHeadcount,
   type ElderPace,
-  type ElderTheme,
 } from "@/lib/elder-demo-intents";
 import { loadMyIntents, publishMyIntent, type Intent } from "@/lib/intents";
 import { CantoneseListenButton, CantoneseMicButton } from "@/components/cantonese-voice";
@@ -28,9 +27,10 @@ function useShowZh() {
 }
 
 type PoolSearch = {
-  view: "list" | "new" | "detail" | "signups" | "saved";
+  view: "list" | "new" | "detail" | "signups" | "saved" | "mine";
   id: string;
   theme: string;
+  from: "" | "mine" | "signups" | "saved";
 };
 
 export const Route = createFileRoute("/pool")({
@@ -39,11 +39,13 @@ export const Route = createFileRoute("/pool")({
       search.view === "new" ||
       search.view === "detail" ||
       search.view === "signups" ||
-      search.view === "saved"
+      search.view === "saved" ||
+      search.view === "mine"
         ? search.view
         : "list",
     id: typeof search.id === "string" ? search.id : "",
     theme: typeof search.theme === "string" ? search.theme : "",
+    from: search.from === "mine" || search.from === "signups" || search.from === "saved" ? search.from : "",
   }),
   component: WishPoolPage,
   head: () => ({
@@ -59,7 +61,7 @@ function WishPoolPage() {
   const show = useShowZh();
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, hydrated } = useAuth();
   const qc = useQueryClient();
   useSavedBootstrap();
   const { data: savedRecords = [] } = useSavedWishes();
@@ -71,6 +73,11 @@ function WishPoolPage() {
     return subscribeSignups(sync);
   }, []);
   const savedIds = savedRecords.map((row) => row.intentId);
+  const { data: myIntents = [] } = useMyIntents(Boolean(user));
+  useEffect(() => {
+    if (!hydrated || user || search.view !== "mine") return;
+    void navigate({ to: "/auth", search: { mode: "signin", redirect: "/pool?view=mine" } });
+  }, [hydrated, user, search.view, navigate]);
   const pool = useQuery({
     queryKey: ["wish-pool"],
     queryFn: async () => {
@@ -86,7 +93,12 @@ function WishPoolPage() {
     },
   });
 
-  const items = pool.data ?? elderDemoIntents();
+  const items = useMemo(() => {
+    const base = pool.data ?? elderDemoIntents();
+    const byId = new Map(base.map((item) => [item.id, item]));
+    for (const mine of myIntents) byId.set(mine.id, mine);
+    return [...byId.values()];
+  }, [pool.data, myIntents]);
   const selected = items.find((item) => item.id === search.id) ?? null;
 
   function joinWish(id: string) {
@@ -98,7 +110,7 @@ function WishPoolPage() {
   }
 
   function openList(theme = search.theme) {
-    void navigate({ to: "/pool", search: { view: "list", id: "", theme } });
+    void navigate({ to: "/pool", search: { view: "list", id: "", theme, from: "" } });
   }
 
   return (
@@ -108,9 +120,27 @@ function WishPoolPage() {
           <button
             type="button"
             onClick={() => {
-              if (search.view === "list" || search.view === "signups" || search.view === "saved") {
+              if (search.view === "detail") {
+                const back =
+                  search.from === "mine" || search.from === "signups" || search.from === "saved"
+                    ? search.from
+                    : "list";
+                void navigate({
+                  to: "/pool",
+                  search: { view: back, id: "", theme: back === "list" ? search.theme : "", from: "" },
+                });
+                return;
+              }
+              if (
+                search.view === "list" ||
+                search.view === "signups" ||
+                search.view === "saved" ||
+                search.view === "mine"
+              ) {
                 void navigate({ to: "/" });
-              } else openList();
+                return;
+              }
+              openList();
             }}
             className="inline-flex items-center gap-1 text-[18px]"
           >
@@ -127,7 +157,9 @@ function WishPoolPage() {
                     ? "我的报名"
                     : search.view === "saved"
                       ? "我的收藏"
-                      : "逛心愿池",
+                      : search.view === "mine"
+                        ? "我发的心愿"
+                        : "逛心愿池",
             )}
           </h1>
           <span className="ml-auto">
@@ -143,7 +175,7 @@ function WishPoolPage() {
             onNeedAuth={() => void navigate({ to: "/auth", search: { mode: "signin", redirect: "/pool" } })}
             onPublished={(intent) => {
               qc.setQueryData<Intent[]>(["wish-pool"], (prev) => [intent, ...(prev ?? items)]);
-              void navigate({ to: "/pool", search: { view: "detail", id: intent.id, theme: "" } });
+              void navigate({ to: "/pool", search: { view: "detail", id: intent.id, theme: "", from: "mine" } });
             }}
           />
         ) : search.view === "detail" && selected ? (
@@ -151,6 +183,7 @@ function WishPoolPage() {
             intent={selected}
             signed={signupIds.includes(selected.id)}
             saved={savedIds.includes(selected.id)}
+            own={selected.ownerId === "me"}
             onSignup={() => joinWish(selected.id)}
             onSave={() => {
               if (!user) {
@@ -160,17 +193,38 @@ function WishPoolPage() {
               toggleSaved(selected.id, "");
             }}
           />
-        ) : search.view === "signups" || search.view === "saved" ? (
+        ) : search.view === "signups" || search.view === "saved" || search.view === "mine" ? (
           <WishList
-            items={items.filter((item) =>
-              (search.view === "signups" ? signupIds : savedIds).includes(item.id),
-            )}
+            items={
+              search.view === "mine"
+                ? items.filter((item) => item.ownerId === "me")
+                : items.filter((item) =>
+                    (search.view === "signups" ? signupIds : savedIds).includes(item.id),
+                  )
+            }
             theme=""
             signupIds={signupIds}
             savedIds={savedIds}
-            emptyText={show(search.view === "signups" ? "还没有报名的活动。" : "还没有收藏的活动。")}
+            showActions={search.view !== "mine"}
+            emptyText={show(
+              search.view === "mine"
+                ? "还没有发布的心愿。"
+                : search.view === "signups"
+                  ? "还没有报名的活动。"
+                  : "还没有收藏的活动。",
+            )}
             onTheme={() => undefined}
-            onOpen={(id) => void navigate({ to: "/pool", search: { view: "detail", id, theme: "" } })}
+            onOpen={(id) =>
+              void navigate({
+                to: "/pool",
+                search: {
+                  view: "detail",
+                  id,
+                  theme: "",
+                  from: search.view === "mine" || search.view === "signups" || search.view === "saved" ? search.view : "",
+                },
+              })
+            }
             onSignup={(id) => joinWish(id)}
             onSave={(id) => {
               if (!user) {
@@ -187,7 +241,7 @@ function WishPoolPage() {
             signupIds={signupIds}
             savedIds={savedIds}
             onTheme={(theme) => openList(theme)}
-            onOpen={(id) => void navigate({ to: "/pool", search: { view: "detail", id, theme: search.theme } })}
+            onOpen={(id) => void navigate({ to: "/pool", search: { view: "detail", id, theme: search.theme, from: "" } })}
             onSignup={(id) => joinWish(id)}
             onSave={(id) => {
               if (!user) {
@@ -201,7 +255,7 @@ function WishPoolPage() {
                 void navigate({ to: "/auth", search: { mode: "signin", redirect: "/pool" } });
                 return;
               }
-              void navigate({ to: "/pool", search: { view: "new", id: "", theme: "" } });
+              void navigate({ to: "/pool", search: { view: "new", id: "", theme: "", from: "" } });
             }}
           />
         )}
@@ -216,6 +270,7 @@ function WishList({
   signupIds,
   savedIds,
   emptyText,
+  showActions = true,
   onTheme,
   onOpen,
   onSignup,
@@ -227,6 +282,7 @@ function WishList({
   signupIds: string[];
   savedIds: string[];
   emptyText?: string;
+  showActions?: boolean;
   onTheme: (theme: string) => void;
   onOpen: (id: string) => void;
   onSignup: (id: string) => void;
@@ -270,14 +326,18 @@ function WishList({
                   {show(intent.ownerName_zh || intent.ownerName)}
                   {intent.placeRaw || intent.venue_zh ? ` · ${show(intent.placeRaw || intent.venue_zh || "")}` : ""}
                   {intent.headcount ? ` · ${show(intent.headcount)}` : ""}
+                  {intent.pace ? ` · ${show(intent.pace)}` : ""}
+                  {intent.cost ? ` · ${show(intent.cost)}` : ""}
                 </p>
               </button>
-              <ActivityActions
-                signed={signupIds.includes(intent.id)}
-                saved={savedIds.includes(intent.id)}
-                onSignup={() => onSignup(intent.id)}
-                onSave={() => onSave(intent.id)}
-              />
+              {showActions ? (
+                <ActivityActions
+                  signed={signupIds.includes(intent.id)}
+                  saved={savedIds.includes(intent.id)}
+                  onSignup={() => onSignup(intent.id)}
+                  onSave={() => onSave(intent.id)}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
@@ -328,12 +388,14 @@ function WishDetail({
   intent,
   signed,
   saved,
+  own,
   onSignup,
   onSave,
 }: {
   intent: Intent;
   signed: boolean;
   saved: boolean;
+  own?: boolean;
   onSignup: () => void;
   onSave: () => void;
 }) {
@@ -371,7 +433,7 @@ function WishDetail({
         ))}
       </dl>
       {intent.otherReqRaw ? <p className="text-[18px] leading-relaxed">{show(intent.otherReqRaw)}</p> : null}
-      <ActivityActions signed={signed} saved={saved} onSignup={onSignup} onSave={onSave} />
+      {own ? null : <ActivityActions signed={signed} saved={saved} onSignup={onSignup} onSave={onSave} />}
       <CantoneseListenButton text={show(spoken)} />
     </article>
   );
@@ -387,7 +449,8 @@ function PublishForm({
   onPublished: (intent: Intent) => void;
 }) {
   const show = useShowZh();
-  const [theme, setTheme] = useState<ElderTheme>("喝茶");
+  const [activity, setActivity] = useState("");
+  const [activityMissing, setActivityMissing] = useState(false);
   const [whenLabel, setWhenLabel] = useState("周六上午");
   const [place, setPlace] = useState("");
   const [headcount, setHeadcount] = useState<ElderHeadcount>("3到5人");
@@ -395,27 +458,34 @@ function PublishForm({
   const [cost, setCost] = useState<ElderCost>("AA");
   const [note, setNote] = useState("");
 
+  const what = activity.trim();
   const preview = useMemo(() => {
     const where = place.trim() || "香港";
-    return `${whenLabel}想约人${theme}，地点在${where}，希望${headcount}。节奏${pace}，费用${cost}。${note.trim()}`;
-  }, [theme, whenLabel, place, headcount, pace, cost, note]);
+    const doing = what || "……";
+    return `${whenLabel}想约人${doing}，地点在${where}，希望${headcount}。节奏${pace}，费用${cost}。${note.trim()}`;
+  }, [what, whenLabel, place, headcount, pace, cost, note]);
 
   function publish() {
     if (!signedIn) {
       onNeedAuth();
       return;
     }
+    if (!what) {
+      setActivityMissing(true);
+      return;
+    }
     const intent = publishMyIntent({
       kind: "other",
-      activityCore: theme,
+      activityCore: what,
       rawText: preview,
       city: "Hong Kong",
       city_zh: "香港",
       placeRaw: place.trim() || "香港",
       placeMode: "offline",
+      place: { city: "hong_kong" },
       activityStrength: "flex",
       placeStrength: "flex",
-      elderTheme: theme,
+      elderTheme: what,
       headcount,
       pace,
       cost,
@@ -434,11 +504,24 @@ function PublishForm({
       }}
     >
       <Field label={show("想做什么")}>
-        <div className="flex flex-wrap gap-2">
-          {ELDER_THEMES.map((item) => (
-            <FilterChip key={item} active={theme === item} label={show(item)} onClick={() => setTheme(item)} />
-          ))}
-        </div>
+        <input
+          value={activity}
+          onChange={(e) => {
+            setActivity(e.target.value);
+            if (e.target.value.trim()) setActivityMissing(false);
+          }}
+          className="elder-input"
+          placeholder={show("自己写，比如逛公园看花")}
+        />
+        <CantoneseMicButton
+          onText={(text) => {
+            setActivity((prev) => (prev ? `${prev}${text}` : text));
+            if (text.trim()) setActivityMissing(false);
+          }}
+        />
+        {activityMissing ? (
+          <p className="text-[16px] text-destructive">{show("先写下想做什么。")}</p>
+        ) : null}
       </Field>
       <Field label={show("什么时候")}>
         <input
@@ -490,7 +573,7 @@ function PublishForm({
       <p className="text-[18px] leading-relaxed text-muted-foreground">
         {show(whenLabel)}
         {" · "}
-        {show(theme)}
+        {what || show("想做什么")}
         {" · "}
         {place.trim() || show("香港")}
         {" · "}
